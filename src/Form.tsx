@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { Slider } from "@mui/material";
+import axios from "axios";
 import "./css/Form.css";
 
-// Define the structure of form values
 interface FormValues {
+  _id?: string; // MongoDB ID
   activity: string;
   price: number;
   type: string;
@@ -12,39 +13,41 @@ interface FormValues {
   accessibility: number;
 }
 
+const API_URL = "http://localhost:5000/activities"; // Change to your backend URL
+
 const ActivityForm: React.FC = () => {
-  // Initialize form handling with react-hook-form
   const { register, handleSubmit, control, reset } = useForm<FormValues>();
-  
-  // Load saved items from localStorage immediately to prevent reset on refresh
-  const [items, setActivities] = useState<FormValues[]>(() => {
-    const storedActivities = localStorage.getItem("items");
-    return storedActivities ? JSON.parse(storedActivities) : [];
-  });
+  const [activities, setActivities] = useState<FormValues[]>([]);
 
-  // Save items to localStorage whenever the list updates
   useEffect(() => {
-    localStorage.setItem("items", JSON.stringify(items));
-  }, [items]);
+    axios.get(API_URL)
+      .then((response: { data: React.SetStateAction<FormValues[]>; }) => setActivities(response.data))
+      .catch((error: any) => console.error("Error fetching activities:", error));
+  }, []);
 
-  // Function to handle form submission and add new activity to the list
-  const onSubmit = (data: FormValues) => {
-    setActivities([...items, { ...data, price: Number(data.price) }]);
-    reset(); // Reset form fields after submission
+  const onSubmit = async (data: FormValues) => {
+    try {
+      const response = await axios.post(API_URL, data);
+      setActivities([...activities, response.data]);
+      reset();
+    } catch (error) {
+      console.error("Error adding activity:", error);
+    }
   };
 
-  // Function to remove an activity from the list by index
-  const removeActivity = (index: number) => {
-    const updatedActivities = items.filter((_, i) => i !== index);
-    setActivities(updatedActivities);
+  const removeActivity = async (id: string) => {
+    try {
+      await axios.delete(`${API_URL}/${id}`);
+      setActivities(activities.filter(activity => activity._id !== id));
+    } catch (error) {
+      console.error("Error deleting activity:", error);
+    }
   };
 
   return (
     <div className="form-wrapper">
-      {/* Display the total count of items */}
-      <h2>Total Activities: {items.length}</h2>
-      
-      {/* Form for adding a new activity */}
+      <h2>Total Activities: {activities.length}</h2>
+
       <form onSubmit={handleSubmit(onSubmit)} className="form-container">
         <div className="form-group">
           <label>Activity</label>
@@ -91,10 +94,9 @@ const ActivityForm: React.FC = () => {
         <button type="submit" className="submit-button">Submit</button>
       </form>
 
-      {/* Display the list of items */}
       <ul className="activity-list">
-        {items.map((activity, index) => (
-          <li key={index} className="activity-item">
+        {activities.map((activity) => (
+          <li key={activity._id} className="activity-item">
             <span>
               <strong>Activity:</strong> {activity.activity} <br />
               <strong>Price:</strong> RM{Number(activity.price).toFixed(2)} <br />
@@ -102,7 +104,9 @@ const ActivityForm: React.FC = () => {
               <strong>Booking Required:</strong> {activity.bookingRequired ? "Yes" : "No"} <br />
               <strong>Accessibility:</strong> {activity.accessibility.toFixed(1)}
             </span>
-            <button className="delete-button" onClick={() => removeActivity(index)}>Delete</button>
+            <button className="delete-button" onClick={() => removeActivity(activity._id!)}>
+              Delete
+            </button>
           </li>
         ))}
       </ul>
